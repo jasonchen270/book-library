@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Book Library</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+
+    header {
+      background: #2b6cb0;
+      color: white;
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      padding: 20px 40px;
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .toolbar input, .toolbar select {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .toolbar input:focus, .toolbar select:focus { border-color: #2b6cb0; }
+    .toolbar input[type="text"] { flex: 1; min-width: 200px; }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .btn-primary { background: #2b6cb0; color: white; }
+    .btn-primary:hover { background: #2c5282; }
+    .btn-danger { background: #e53e3e; color: white; }
+    .btn-danger:hover { background: #c53030; }
+    .btn-secondary { background: #edf2f7; color: #4a5568; }
+    .btn-secondary:hover { background: #e2e8f0; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+      padding: 30px 40px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: box-shadow 0.2s;
+    }
+    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .card-title { font-size: 1.05rem; font-weight: 700; color: #2d3748; }
+    .card-author { font-size: 0.9rem; color: #718096; }
+    .card-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+    .badge {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .badge-genre { background: #ebf8ff; color: #2b6cb0; }
+    .badge-year  { background: #f0fff4; color: #276749; }
+    .card-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      width: 400px;
+      max-width: 95vw;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal h2 { font-size: 1.2rem; }
+    .modal label { font-size: 0.85rem; color: #4a5568; font-weight: 600; }
+    .modal input, .modal select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-top: 4px;
+      outline: none;
+    }
+    .modal input:focus { border-color: #2b6cb0; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    #empty { text-align: center; padding: 60px; color: #a0aec0; font-size: 1rem; display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📚 Book Library</h1>
+  <button class="btn-primary" onclick="openModal()">+ Add Book</button>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="search" placeholder="Search by title or author..." oninput="renderBooks()" />
+  <select id="filterGenre" onchange="renderBooks()">
+    <option value="">All Genres</option>
+  </select>
+</div>
+
+<div class="grid" id="grid"></div>
+<div id="empty">No books found.</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Add Book</h2>
+    <div>
+      <label>Title</label>
+      <input id="fTitle" type="text" placeholder="Title" />
+    </div>
+    <div>
+      <label>Author</label>
+      <input id="fAuthor" type="text" placeholder="Author" />
+    </div>
+    <div>
+      <label>Year</label>
+      <input id="fYear" type="number" placeholder="Year" />
+    </div>
+    <div>
+      <label>Genre</label>
+      <input id="fGenre" type="text" placeholder="Genre" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveBook()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let books = [];
+  let editingId = null;
+
+  async function loadBooks() {
+    const res = await fetch('/api/books');
+    books = await res.json();
+    populateGenres();
+    renderBooks();
+  }
+
+  function populateGenres() {
+    const genres = [...new Set(books.map(b => b.genre).filter(Boolean))].sort();
+    const sel = document.getElementById('filterGenre');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Genres</option>';
+    genres.forEach(g => {
+      const o = document.createElement('option');
+      o.value = g; o.textContent = g;
+      if (g === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
+  function renderBooks() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const genre = document.getElementById('filterGenre').value;
+    const filtered = books.filter(b =>
+      (!q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)) &&
+      (!genre || b.genre === genre)
+    );
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    grid.innerHTML = '';
+    empty.style.display = filtered.length ? 'none' : 'block';
+    filtered.forEach(b => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-title">${b.title}</div>
+        <div class="card-author">by ${b.author}</div>
+        <div class="card-meta">
+          <span class="badge badge-genre">${b.genre || 'Unknown'}</span>
+          <span class="badge badge-year">${b.year}</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn-secondary" onclick="editBook(${b.id})">Edit</button>
+          <button class="btn-danger" onclick="deleteBook(${b.id})">Delete</button>
+        </div>`;
+      grid.appendChild(card);
+    });
+  }
+
+  function openModal(book = null) {
+    editingId = book ? book.id : null;
+    document.getElementById('modalTitle').textContent = book ? 'Edit Book' : 'Add Book';
+    document.getElementById('fTitle').value = book?.title || '';
+    document.getElementById('fAuthor').value = book?.author || '';
+    document.getElementById('fYear').value = book?.year || '';
+    document.getElementById('fGenre').value = book?.genre || '';
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    editingId = null;
+  }
+
+  function editBook(id) {
+    openModal(books.find(b => b.id === id));
+  }
+
+  async function saveBook() {
+    const body = {
+      title: document.getElementById('fTitle').value,
+      author: document.getElementById('fAuthor').value,
+      year: parseInt(document.getElementById('fYear').value),
+      genre: document.getElementById('fGenre').value,
+    };
+    if (editingId) {
+      await fetch(`/api/books/${editingId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    } else {
+      await fetch('/api/books', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    }
+    closeModal();
+    loadBooks();
+  }
+
+  async function deleteBook(id) {
+    if (!confirm('Delete this book?')) return;
+    await fetch(`/api/books/${id}`, { method: 'DELETE' });
+    loadBooks();
+  }
+
+  loadBooks();
+</script>
+</body>
+</html>
