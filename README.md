@@ -1,6 +1,6 @@
 # book-library
 
-A small REST API for managing a library of books, built with Spring Boot 3 and Java 17 (Spring Web REST controller, Spring Data JPA persistence, and an in-memory H2 database seeded on startup).
+A small REST API for managing a library of books, built with Spring Boot and Java (Spring Web REST controller, Spring Data JPA persistence, and an in-memory H2 database seeded on startup).
 
 ## Prerequisites
 
